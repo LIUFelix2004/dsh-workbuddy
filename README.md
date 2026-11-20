@@ -313,3 +313,13 @@ rm -rf ~/.dsh/workbuddy
 ---
 
 > **免责声明**：本项目仅用于个人学习与本地工作流整合，把你自己账号的模型能力接到自己的工具里。请遵守 WorkBuddy / CodeBuddy 的服务条款；不要用它做转售、共享账号或规避计费。上游随时可能调整校验规则，插件不保证长期可用。
+
+<!-- felix-ai-shop:start -->
+
+---
+
+### 🛒 Felix AI 工具小铺
+
+各种低价 AI 工具，稳定直供 → **[felixaitools.shop/](https://felixaitools.shop/)**
+
+<!-- felix-ai-shop:end -->
