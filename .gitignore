@@ -1,0 +1,14 @@
+# dependencies
+node_modules/
+
+# packaged artifacts
+*.tgz
+*.zip
+
+# logs and local state
+*.log
+.DS_Store
+Thumbs.db
+
+# local notes
+_research/

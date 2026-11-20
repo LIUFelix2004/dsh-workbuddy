@@ -1,0 +1,7 @@
+# dsh-workbuddy bundle patch
+# 挂载两个入口：host（账号导入 + HTTP 接口）与 web 客户端面板。
+# 可用 config 覆盖：
+#   config: { settingsNamespace: llm-pi-ai }
+- insert:
+    - id: dsh-workbuddy
+      name: dsh-workbuddy

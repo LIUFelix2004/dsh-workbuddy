@@ -1,0 +1,58 @@
+{
+  "name": "dsh-workbuddy",
+  "version": "0.3.1",
+  "private": false,
+  "description": "把 WorkBuddy 账号导入成 DeepSeek Harness 的模型提供商：一个账号一条路由，全部模型直接进模型选择器，显示每个账号的积分余额，并自动绕过网关的 11128 渠道校验（system 文本 + User-Agent）。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "workbuddy",
+    "codebuddy",
+    "provider",
+    "llm"
+  ],
+  "license": "MIT",
+  "author": "LIUFelix2004",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LIUFelix2004/dsh-workbuddy.git"
+  },
+  "homepage": "https://github.com/LIUFelix2004/dsh-workbuddy#readme",
+  "bugs": {
+    "url": "https://github.com/LIUFelix2004/dsh-workbuddy/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  }
+}
