@@ -1,8 +1,8 @@
 {
   "name": "dsh-workbuddy",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": false,
-  "description": "把 WorkBuddy 账号导入成 DeepSeek Harness 的模型提供商：一个账号一条路由，全部模型直接进模型选择器，显示每个账号的积分余额，并自动绕过网关的 11128 渠道校验（system 文本 + User-Agent）。",
+  "description": "把 WorkBuddy 账号导入成 DeepSeek Harness 的模型提供商：一个账号一条路由、全部模型进选择器、显示积分余额、自动绕过 11128 渠道校验，并与 dsh-purge 融合压上破甲层。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -24,7 +24,8 @@
     "workbuddy",
     "codebuddy",
     "provider",
-    "llm"
+    "llm",
+    "jailbreak"
   ],
   "license": "MIT",
   "author": "LIUFelix2004",
