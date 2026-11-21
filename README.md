@@ -1,15 +1,21 @@
 # dsh-workbuddy
 
-> 把 **WorkBuddy 账号**接进 **DeepSeek Harness**：一个账号一条 provider 路由，WorkBuddy 里的全部模型直接出现在 DSH 的模型选择器里，并显示每个账号的积分余额、自动绕过网关的 11128 渠道校验。
+> 把 **WorkBuddy 账号**接进 **DeepSeek Harness**：**所有账号共用一家提供商**（`WorkBuddy`），模型是池内并集，请求按账号轮流转发；每个账号的积分余额单独显示，并自动绕过网关的 11128 渠道校验、压上破甲层。
 
 不启动 WorkBuddy 桌面端，不跑它的 CLI，也不背它的系统提示和 47 个工具定义 —— 只把模型本身借出来。首字延迟、token 开销、常驻内存都回到"只调模型"的量级。
 
 ```
-WorkBuddy 账号 JSON  ──►  dsh-workbuddy  ──►  llm-pi-ai 的自定义 provider  ──►  模型选择器
-                          │
-                          ├─ 凭据：DSH credentials（配置里只有引用）
-                          ├─ 余额：/billing/meter/get-user-resource-summary
-                          └─ 守卫：fetch 层修正 system 文本 + User-Agent
+WorkBuddy 账号 JSON ──►  dsh-workbuddy
+                        │
+                        ├─ 账号池：127.0.0.1:<port>/v2（轮询 + 冷却 + 失败换号）
+                        ├─ 一家 provider：llm-pi-ai 的 route=workbuddy（模型并集）
+                        ├─ 凭据：DSH credentials（配置里只有引用）
+                        ├─ 余额：/billing/meter/get-user-resource-summary（按账号）
+                        └─ 守卫：fetch 层改 system 文本 + User-Agent + 压破甲层
+
+模型选择器：  WorkBuddy  ├─ 快速
+                        ├─ DeepSeek-V4.1-Flash
+                        └─ …
 ```
 
 ## 目录
@@ -39,7 +45,7 @@ WorkBuddy 账号 JSON  ──►  dsh-workbuddy  ──►  llm-pi-ai 的自定�
 | 依赖桌面端 | 必须开着 | 不需要 |
 | 工具调用 | CLI 自己执行，DSH 看不见过程 | 原生透传，由 DSH 执行 |
 | 输出 | 被 CLI 的系统提示污染 | 裸模型输出 |
-| 多账号额度 | 手动切 | 一个账号一条路由，各自独立计数 |
+| 多账号额度 | 手动切 | 一家 provider 后面挂账号池，自动轮转 |
 
 功能清单：
 
@@ -91,10 +97,10 @@ cp -r dsh-workbuddy ~/.dsh/profiles/<profile>/node_modules/dsh-workbuddy
 2. 把账号 JSON 粘进输入框（支持一次粘多条：JSON 数组、多个对象拼接、整段 `workbuddy-desktop.info` 原文）。
 3. 点 **导入并应用**。它会：
    - 把 token 写进 DSH 凭据服务（配置里只有引用）；
-   - 在 `llm-pi-ai` 里写入 provider `WorkBuddy · 账号名`；
+   - 在 `llm-pi-ai` 里写入**唯一一家** provider `WorkBuddy`（模型是池内并集）；
    - 用第一个模型发一次真实请求做连通性检查；
    - 查一次积分余额。
-4. 到模型选择器选 **WorkBuddy · 账号名 → 模型**。
+4. 到模型选择器选 **WorkBuddy → 模型**（不管导入几个账号，都只有这一家）。
 
 之后 DSH 重启会自动把已导入的账号重新挂上。
 
@@ -248,13 +254,21 @@ WorkBuddy 国内网关会对请求做两种校验，命中就回 HTTP 400：
 1. **在 WorkBuddy 里选 `Deepseek-V4-Flash` 是亏的** —— 官方它与 V4.1-Flash 同价，但 WorkBuddy 给它 x0.17、给 V4.1-Flash x0.11，同样的钱只买到 2/3 的量。
 2. **思考 token 也算 output**。V4.1-Flash / V4-Pro 都是「必定思考」的模型，回答 500 字可能实际产出 2000+ tokens。
 
-## 多账号
+## 多账号：一家提供商，一个账号池
 
-每个账号 = 一条独立路由（`wb-xxxxxxxx`）：
+**模型选择器里只会出现一家 `WorkBuddy`**。账号数量再多也不分家：
 
-- 模型选择器里分开显示，互不影响；
-- 额度、限流、积分各自计算，一个被限流不连坐；
-- 删除账号同时摘掉路由和凭据，不留残渣。
+- 模型列表 = 池内所有账号可用模型的**并集**（同名去重；不同账号的模型权限不一样时会自动合并）
+- 每次请求由本地池（`127.0.0.1:<随机端口>/v2`）挑账号：**轮询**，失败/限流的账号进入**冷却**并自动跳过
+- 冷却规则：401/403 五分钟、429 三十秒、5xx 十秒；全部账号都在冷却时退回最早恢复的那个
+- 上游返回可重试错误（401/403/408/429/5xx）时，**换下一个账号重试**，不会把错误直接抛给会话
+- 面板里每个账号仍单独显示余额、命中次数、是否冷却中
+
+代价与边界：
+
+- 多一层本地转发，延迟增加约 1–3ms（回环）。
+- DSH 侧只有一条 `${origin}/chat/completions` 路由，所以「哪个账号在答」由池子决定；响应头里带 `x-workbuddy-account` 便于排查。
+- 面板上点「模型」看到的是**该账号自己**能用的模型；实际可供选择的是并集。
 
 ## 模型目录
 
@@ -298,11 +312,12 @@ dsh-workbuddy/
 ├── package.json          # dsh.bundle / dsh.client 声明
 ├── cordis.patch.yml      # 挂载点
 ├── lib/
-│   ├── index.js          # host 插件：HTTP 路由、账号存储、写 provider、余额
+│   ├── index.js          # host 插件：HTTP 路由、账号存储、写池 provider、余额
+│   ├── pool.js           # 账号池：本地转发、轮询、冷却、失败换号
 │   ├── guard.js          # fetch 守卫：system 文本 + User-Agent + 破甲注入
 │   ├── purge.js          # 破甲层：读取 dsh-purge 注入文本，压壳 + 尾锚点
 │   ├── catalog.js        # 模型目录：读本机产品配置，内置兜底
-│   └── client.js         # web 面板：导入 / 余额 / 测试 / 破甲开关
+│   └── client.js         # web 面板：导入 / 余额 / 测试 / 破甲开关 / 模型标记
 └── README.md
 ```
 

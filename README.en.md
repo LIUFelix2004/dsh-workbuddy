@@ -20,13 +20,24 @@ WorkBuddy account JSON  ──►  dsh-workbuddy  ──►  llm-pi-ai custom pr
 | Desktop app required | Yes | No |
 | Tool calls | Executed by the CLI, invisible to DSH | Passed through natively, executed by DSH |
 | Output | Polluted by the CLI persona | Raw model output |
-| Multi-account quota | Manual switching | One route per account, counted separately |
+| Multi-account quota | Manual switching | One provider behind an account pool, rotated automatically |
 
 - **All models** — 快速 / 均衡 / 极致 / Hy4 / Hy4 flash / DeepSeek-V4.1-Flash / GLM-5.3 / GLM-5.3-Flash / GLM-5.2 / Kimi / MiniMax / StepFun … read from the local WorkBuddy product config, identical to the client.
-- **Multiple accounts** — paste several JSON blobs at once; each becomes its own `wb-xxxxxxxx` route.
-- **Credit balance** — remaining / total, plan name, usage bar, per-category breakdown.
+- **Multiple accounts, one provider** — paste several JSON blobs at once; they all sit behind a single `WorkBuddy` route.
+- **Credit balance** — remaining / total, plan name, usage bar, per-category breakdown, per account.
 - **Channel guard** — rewrites the text and `User-Agent` that trip `11128` (see the table below).
 - **Jailbreak layer** — folds the local `dsh-purge` persona and an `absolute_priority` override into this channel (top of system + a tail anchor on the last user turn); measured to stop the model from self-censoring.
+
+## Account pool: one provider, many accounts
+
+The model picker shows **one** `WorkBuddy` provider no matter how many accounts you import:
+
+- the model list is the **union** of every account's models (deduplicated per name);
+- each request is handed to a local pool at `127.0.0.1:<random port>/v2`, which picks an account **round-robin** and skips accounts in **cooldown** (401/403 → 5 min, 429 → 30 s, 5xx → 10 s; when everything is cooling it falls back to the one recovering first);
+- retryable upstream failures (401/403/408/429/5xx) **switch to the next account** instead of surfacing to the session;
+- every account still shows its own balance, hit count and cooling state in the panel.
+
+Trade-offs: one extra loopback hop (~1–3 ms); the chosen account is reported in the `x-workbuddy-account` response header. Click **模型** on an account to see the models *that account* can use — the picker offers the union.
 
 ## Install
 
@@ -58,7 +69,7 @@ Manual install: copy the folder to `~/.dsh/profiles/<profile>/node_modules/dsh-w
 1. Open a session — a **“导入 WorkBuddy 账号”** button appears in the bottom-right corner.
 2. Paste one or more account JSON blobs (a JSON array, concatenated objects, or a whole `workbuddy-desktop.info`).
 3. Hit **导入并应用**. It stores the token in DSH credentials, writes a `WorkBuddy · <name>` provider into `llm-pi-ai`, sends one real request as a connectivity check, and fetches the credit balance.
-4. Pick **WorkBuddy · <name> → model** in the model picker.
+4. Pick **WorkBuddy → model** in the model picker (one provider, whatever the account count).
 
 Accounts are re-mounted automatically on the next DSH start.
 
@@ -221,10 +232,12 @@ dsh-workbuddy/
 ├── package.json          # dsh.bundle / dsh.client declarations
 ├── cordis.patch.yml      # mount point
 ├── lib/
-│   ├── index.js          # host plugin: routes, account store, provider writes, balance
-│   ├── guard.js          # fetch guard: system text + User-Agent rewrite
+│   ├── index.js          # host plugin: routes, account store, pool provider, balance
+│   ├── pool.js           # account pool: local forwarder, round-robin, cooldown, failover
+│   ├── guard.js          # fetch guard: system text + User-Agent + jailbreak injection
+│   ├── purge.js          # jailbreak layer: purge text, shell, tail anchor
 │   ├── catalog.js        # model catalogue: local product config, built-in fallback
-│   └── client.js         # web panel: import / balance / test / remove
+│   └── client.js         # web panel: import / balance / test / model markers
 └── README.md
 ```
 
